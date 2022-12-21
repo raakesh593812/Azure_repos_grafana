@@ -1,0 +1,66 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+
+pool:
+  # Needs to run on a host with terraform cli and can reach the tfe api
+  name: viv-poc
+
+trigger : none
+
+parameters:
+  - name: build_para
+    displayName: select approitate value
+    type: string
+    default: -- SELECT --
+    values:
+      - -- SELECT --
+      - pod
+      - aks-kv-sync
+      - foundation
+
+stages:
+- stage: Foundation
+  condition: eq('${{ parameters.build_para }}', 'foundation')
+  jobs: 
+    - job: pre_deploy
+      steps:
+      - checkout: self
+      - task: Kubernetes@1
+        inputs:
+          connectionType: 'Kubernetes Service Connection'
+          kubernetesServiceEndpoint: 'aks-kub'
+          command: 'create'
+          useConfigurationFile: true
+          configuration: 'grafana.yml'
+          secretType: 'dockerRegistry'
+          containerRegistryType: 'Azure Container Registry'
+          configMapName: 'ge-config'
+          forceUpdateConfigMap: true
+          useConfigMapFile: true
+          configMapFile: 'grafana.ini'
+
+- stage: KeyVaultSync
+  condition: eq('${{ parameters.build_para }}', 'aks-kv-sync')
+  jobs:
+    - job: check_aks2k8s_CSI_driver_status
+      steps:
+        - checkout: self
+        - task: Bash@3
+          inputs:
+            targetType: 'inline'
+            script: |      
+              echo 'sync the password with aks'
+- stage: Pod_deployment
+  condition: eq('${{ parameters.build_para }}', 'pod')
+  jobs:
+    - job:
+      steps:
+        - checkout: none
+        - task: Bash@3
+          inputs:
+            targetType: 'inline'
+            script: |      
+              echo 'Pod deployment'
